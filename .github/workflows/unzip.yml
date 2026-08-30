@@ -1,9 +1,9 @@
-name: Unzip remix Doc Scanner.zip
+name: Unzip remixDocScanner.zip
 
 on:
   push:
     paths:
-      - 'remix Doc Scanner.zip'  # যখনই এই zip ফাইলটি আপলোড/পুশ করবেন তখনই রান হবে
+      - 'remixDocScanner.zip'  # যখনই এই zip ফাইলটি আপলোড/পুশ করবেন তখনই রান হবে
   workflow_dispatch:           # ম্যানুয়ালি Actions ট্যাব থেকেও রান করার সুবিধা
 
 jobs:
@@ -18,18 +18,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Extract remix Doc Scanner.zip
+      - name: Extract remixDocScanner.zip
         run: |
-          if [ -f "remix Doc Scanner.zip" ]; then
-            echo "Unzipping remix Doc Scanner.zip..."
+          if [ -f "remixDocScanner.zip" ]; then
+            echo "Unzipping remixDocScanner.zip..."
             
             # Zip ফাইলটি Root ফোল্ডারে Unzip করা হচ্ছে
-            unzip -o remix Doc Scanner.zip -d ./
+            unzip -o remixDocScanner.zip -d ./
             
             # Unzip হয়ে যাওয়ার পর মূল Zip ফাইলটি মুছে ফেলা হচ্ছে
-            rm remix Doc Scanner.zip
+            rm remixDocScanner.zip
           else
-            echo "remix Doc Scanner.zip file not found!"
+            echo "remixDocScanner.zip file not found!"
             exit 1
           fi
 
@@ -39,5 +39,5 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
           git add .
-          git commit -m "Unzipped remix Doc Scanner.zip successfully" || echo "No changes to commit"
+          git commit -m "Unzipped remixDocScanner.zip successfully" || echo "No changes to commit"
           git push
