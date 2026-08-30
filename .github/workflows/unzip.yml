@@ -1,0 +1,43 @@
+name: Unzip remix Doc Scanner.zip
+
+on:
+  push:
+    paths:
+      - 'remix Doc Scanner.zip'  # যখনই এই zip ফাইলটি আপলোড/পুশ করবেন তখনই রান হবে
+  workflow_dispatch:           # ম্যানুয়ালি Actions ট্যাব থেকেও রান করার সুবিধা
+
+jobs:
+  unzip-job:
+    runs-on: ubuntu-latest
+    
+    # Repository-তে পরিবর্তন পুশ করার জন্য পারমিশন
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Extract remix Doc Scanner.zip
+        run: |
+          if [ -f "remix Doc Scanner.zip" ]; then
+            echo "Unzipping remix Doc Scanner.zip..."
+            
+            # Zip ফাইলটি Root ফোল্ডারে Unzip করা হচ্ছে
+            unzip -o remix Doc Scanner.zip -d ./
+            
+            # Unzip হয়ে যাওয়ার পর মূল Zip ফাইলটি মুছে ফেলা হচ্ছে
+            rm remix Doc Scanner.zip
+          else
+            echo "remix Doc Scanner.zip file not found!"
+            exit 1
+          fi
+
+      - name: Commit and Push Extracted Files
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add .
+          git commit -m "Unzipped remix Doc Scanner.zip successfully" || echo "No changes to commit"
+          git push
