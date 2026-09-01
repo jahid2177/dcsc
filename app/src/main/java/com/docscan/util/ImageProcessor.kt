@@ -103,6 +103,11 @@ object ImageProcessor {
         brightness: Float = 0f, // -1f to 1f
         contrast: Float = 1f   // 0.5f to 2f
     ): Bitmap {
+        // Preserve true original pixels — no OpenCV round-trip color shift
+        if (filterType == FilterType.ORIGINAL && brightness == 0f && contrast == 1f) {
+            return source
+        }
+
         // 1. Primary: Native OpenCV high-precision document filter engine
         val cvFiltered = com.docscan.scanner.OpenCvFilterProcessor.applyFilter(
             source = source,

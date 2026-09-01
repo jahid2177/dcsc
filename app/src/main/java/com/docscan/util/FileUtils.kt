@@ -48,7 +48,7 @@ object FileUtils {
         return "${prefix}_${timeStamp}_$random.$extension"
     }
 
-    fun saveBitmapToFile(bitmap: Bitmap, file: File, quality: Int = 90): Boolean {
+    fun saveBitmapToFile(bitmap: Bitmap, file: File, quality: Int = 98): Boolean {
         return try {
             FileOutputStream(file).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
@@ -274,7 +274,7 @@ object FileUtils {
             uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
             if (uri != null) {
                 resolver.openOutputStream(uri)?.use { outStream ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 95, outStream)
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 98, outStream)
                 }
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                     values.clear()
