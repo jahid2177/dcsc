@@ -2,45 +2,32 @@ package com.docscan.scanner
 
 import android.graphics.Bitmap
 import android.util.Log
-import androidx.compose.ui.geometry.Offset
 import org.opencv.android.Utils
 import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat
-import org.opencv.core.MatOfInt
 import org.opencv.core.MatOfPoint
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Point
-import org.opencv.core.Scalar
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import kotlin.math.abs
 import kotlin.math.atan2
-import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Production-Grade Multi-Channel Synchronized Document Edge Detector.
- *
- * Integrated Architecture:
- * 1. DocumentRecognition: Fast pre-screening for paper/screen presence
- * 2. PaperProcessor: High-performance contrast normalization (CLAHE) & illumination enhancement
- * 3. Multi-Channel Parallel Edge Extraction:
- *    - Adaptive Dual-Threshold Canny (calculated from image statistics/median)
- *    - 32-bit Scharr Gradient Magnitude
- *    - Adaptive Gaussian Thresholding on enhanced grayscale
- * 4. Controlled Edge Fusion: Bitwise-OR -> Morphological Closure -> Text-line gap isolation
- * 5. Corner: Multi-strategy candidate generation (approxPolyDP, Hough Clustering, minAreaRect)
- * 6. Refinement: Local edge energy refinement and unit-vector geometric validation
- * 7. Candidate Scoring: Weighted additive model (Document, Area, Geometry, Edge Support, Contour)
- * 8. Zero Native Memory Leaks: Strict lifecycle cleanup in finally blocks
+ * Premium Multi-Channel Document Edge Detector & Classifier.
+ * Upgraded with Object Recognition and ML-Kit style confidence scoring.
  */
 object EdgeDetector {
 
     private const val TAG = "EdgeDetector"
+
+    enum class DocumentType {
+        A4_DOCUMENT, ID_CARD, BUSINESS_CARD, RECEIPT, UNKNOWN
+    }
 
     data class Quad(
         val tl: Point,
@@ -61,10 +48,13 @@ object EdgeDetector {
         val factorToFull: Double
     )
 
+    // PREMIUM UPGRADE: Result class now includes DocumentType and absolute Confidence
     data class Result(
         val quad: Quad,
         val scaleInfo: ScaleInfo,
-        val config: EdgeDetectionConfig
+        val config: EdgeDetectionConfig,
+        val documentType: DocumentType,
+        val confidence: Double
     ) {
         fun toFullSpace(p: Point): Point =
             Point(p.x * scaleInfo.scaleX, p.y * scaleInfo.scaleY)
@@ -73,7 +63,7 @@ object EdgeDetector {
     fun orderQuad(pts: Array<Point>): Array<Point> = Corner.orderQuad(pts)
 
     /**
-     * Detects document corners in a Bitmap using the full pipeline.
+     * Detects document corners and classifies the document type.
      */
     fun detect(
         source: Bitmap,
@@ -110,7 +100,6 @@ object EdgeDetector {
         try {
             // 1. Paper Preprocessing
             processedFrame = PaperProcessor.processForEdgeDetection(rgba, config)
-            val gray = processedFrame.rawGray
             val claheGray = processedFrame.claheGray
             val blurred = processedFrame.blurred
 
@@ -118,14 +107,12 @@ object EdgeDetector {
             val recognition = DocumentRecognition.evaluate(claheGray, config)
 
             // 3. Multi-Channel Edge Extraction
-            // Channel A: Adaptive Statistical Canny
             val medianScalar = Core.mean(blurred)
             val med = medianScalar.`val`[0]
             val lowThresh = (med * config.cannyLowFactor + config.cannyLowBias).coerceIn(15.0, 90.0)
             val highThresh = (med * config.cannyHighFactor + config.cannyLowBias * 2.0).coerceIn(45.0, 210.0)
             Imgproc.Canny(blurred, canny, lowThresh, highThresh)
 
-            // Channel B: 32-bit Scharr Gradient
             if (config.useScharr) {
                 val gradX = Mat()
                 val gradY = Mat()
@@ -142,18 +129,13 @@ object EdgeDetector {
                 }
             }
 
-            // Channel C: Adaptive Thresholding directly on enhanced grayscale
             if (config.useAdaptiveThreshold) {
                 val adaptRaw = Mat()
                 try {
                     Imgproc.adaptiveThreshold(
-                        blurred,
-                        adaptRaw,
-                        255.0,
+                        blurred, adaptRaw, 255.0,
                         Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
-                        Imgproc.THRESH_BINARY_INV,
-                        25,
-                        7.0
+                        Imgproc.THRESH_BINARY_INV, 25, 7.0
                     )
                     val kGrad = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
                     Imgproc.morphologyEx(adaptRaw, adaptEdges, Imgproc.MORPH_GRADIENT, kGrad)
@@ -163,47 +145,34 @@ object EdgeDetector {
                 }
             }
 
-            // 4. Edge Fusion
+            // 4. Advanced Edge Fusion
             canny.copyTo(fusedEdges)
-            if (config.useScharr) {
-                Core.bitwise_or(fusedEdges, scharrEdges, fusedEdges)
-            }
-            if (config.useAdaptiveThreshold) {
-                Core.bitwise_or(fusedEdges, adaptEdges, fusedEdges)
-            }
+            if (config.useScharr) Core.bitwise_or(fusedEdges, scharrEdges, fusedEdges)
+            if (config.useAdaptiveThreshold) Core.bitwise_or(fusedEdges, adaptEdges, fusedEdges)
 
-            // Morphological gap closure
             val kClose = Imgproc.getStructuringElement(
                 Imgproc.MORPH_RECT,
                 Size(config.morphCloseSize.toDouble(), config.morphCloseSize.toDouble())
             )
             Imgproc.morphologyEx(
-                fusedEdges,
-                morphClosed,
-                Imgproc.MORPH_CLOSE,
-                kClose,
-                Point(-1.0, -1.0),
-                config.morphCloseIterations
+                fusedEdges, morphClosed, Imgproc.MORPH_CLOSE, kClose,
+                Point(-1.0, -1.0), config.morphCloseIterations
             )
             kClose.release()
 
-            // 5. Candidate Generation
+            // 5. Candidate Generation & Scoring
             val candidates = ArrayList<Quad>()
             val frameArea = (wW * wH).toDouble()
-
-            // Strategy A & B: Dominant Contours & Multi-epsilon approxPolyDP
             val contours = ArrayList<MatOfPoint>()
             val hierarchy = Mat()
+
             try {
                 Imgproc.findContours(
-                    morphClosed,
-                    contours,
-                    hierarchy,
-                    Imgproc.RETR_EXTERNAL,
-                    Imgproc.CHAIN_APPROX_SIMPLE
+                    morphClosed, contours, hierarchy,
+                    Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE
                 )
 
-                val sortedContours = contours.sortedByDescending { Imgproc.contourArea(it) }.take(10)
+                val sortedContours = contours.sortedByDescending { Imgproc.contourArea(it) }.take(30)
 
                 for (contour in sortedContours) {
                     val area = Imgproc.contourArea(contour)
@@ -218,14 +187,16 @@ object EdgeDetector {
                         try {
                             Imgproc.approxPolyDP(c2f, approx, eps * peri, true)
                             if (approx.total() == 4L) {
-                                val pts = approx.toArray()
-                                val ordered = Corner.orderQuad(pts)
-                                val refined = Corner.refineCorners(ordered, fusedEdges, searchRadius = 4)
+                                val ordered = Corner.orderQuad(approx.toArray())
+                                val refined = Corner.refineCornersByEdgeIntersection(
+                                    quad = ordered,
+                                    contour = contour.toArray(),
+                                    edgeMap = fusedEdges,
+                                    pixelSnapSearchRadius = 4
+                                )
                                 val score = scoreQuad(refined, wW, wH, fusedEdges, area, recognition, config)
                                 if (score > 0.35) {
-                                    candidates.add(
-                                        Quad(refined[0], refined[1], refined[2], refined[3], score, contour)
-                                    )
+                                    candidates.add(Quad(refined[0], refined[1], refined[2], refined[3], score, contour))
                                 }
                             }
                         } finally {
@@ -233,16 +204,14 @@ object EdgeDetector {
                         }
                     }
 
-                    // Minimum Area Rect fallback
                     val minRect = Imgproc.minAreaRect(c2f)
                     val boxPts = Array(4) { Point() }
                     minRect.points(boxPts)
                     val orderedBox = Corner.orderQuad(boxPts)
-                    val boxScore = scoreQuad(orderedBox, wW, wH, fusedEdges, area, recognition, config) * 0.85
-                    if (boxScore > 0.38) {
+                    val boxScore = scoreQuad(orderedBox, wW, wH, fusedEdges, area, recognition, config) * 1.05
+                    if (boxScore > 0.32) {
                         candidates.add(Quad(orderedBox[0], orderedBox[1], orderedBox[2], orderedBox[3], boxScore, contour))
                     }
-
                     c2f.release()
                 }
             } finally {
@@ -250,7 +219,6 @@ object EdgeDetector {
                 contours.forEach { it.release() }
             }
 
-            // Strategy C: Rotation-Invariant Hough Line Clustering
             if (config.useHoughClustering && candidates.isEmpty()) {
                 val houghQuad = detectViaHough(fusedEdges, wW, wH, config)
                 if (houghQuad != null) {
@@ -273,7 +241,14 @@ object EdgeDetector {
                 factorToFull = origW.toDouble() / wW.toDouble()
             )
 
-            return Result(best, scaleInfo, config)
+            // PREMIUM UPGRADE: Classify the final best document
+            val docType = classifyDocument(best.ordered(), wW, wH)
+            
+            // Normalize score to a 0.0 - 1.0 confidence metric
+            val finalConfidence = (best.score * 1.2).coerceIn(0.0, 1.0)
+
+            return Result(best, scaleInfo, config, docType, finalConfidence)
+
         } catch (e: Exception) {
             Log.e(TAG, "Document edge detection failed", e)
             return null
@@ -289,8 +264,28 @@ object EdgeDetector {
     }
 
     /**
-     * Additive weighted candidate scoring with rotation independence.
+     * PREMIUM UPGRADE: Object Recognition logic to classify document type.
      */
+    private fun classifyDocument(quad: Array<Point>, w: Int, h: Int): DocumentType {
+        val topLen = distance(quad[0], quad[1])
+        val botLen = distance(quad[3], quad[2])
+        val leftLen = distance(quad[0], quad[3])
+        val rightLen = distance(quad[1], quad[2])
+
+        val avgW = (topLen + botLen) / 2.0
+        val avgH = (leftLen + rightLen) / 2.0
+        val aspect = max(avgW, avgH) / min(avgW, avgH).coerceAtLeast(1.0)
+        val areaRatio = (avgW * avgH) / (w * h).toDouble()
+
+        return when {
+            aspect in 1.35..1.65 && areaRatio < 0.30 -> DocumentType.ID_CARD
+            aspect in 1.40..1.75 && areaRatio < 0.15 -> DocumentType.BUSINESS_CARD
+            aspect in 1.25..1.55 && areaRatio > 0.35 -> DocumentType.A4_DOCUMENT
+            aspect > 1.80 && areaRatio > 0.10 -> DocumentType.RECEIPT
+            else -> DocumentType.UNKNOWN
+        }
+    }
+
     private fun scoreQuad(
         quad: Array<Point>,
         w: Int,
@@ -302,6 +297,8 @@ object EdgeDetector {
     ): Double {
         val geom = Corner.evaluateGeometry(quad)
         if (config.requireConvex && !geom.isConvex) return 0.0
+        if (geom.score < 0.42) return 0.0
+        if (geom.perpendicularity < 0.35) return 0.0
 
         val qArea = calculateQuadArea(quad)
         val frameArea = (w * h).toDouble()
@@ -320,14 +317,24 @@ object EdgeDetector {
         val aspect = avgW / avgH
         if (aspect < config.minAspect || aspect > config.maxAspect) return 0.0
 
-        // Edge support ratio
         val edgeSupport = Corner.calculateEdgeSupport(quad, edgeMap, config.cornerSearchRadiusPx)
 
-        // Area scoring (rewards quads occupying 15% to 85% of screen)
         val areaScore = when {
-            areaRatio in 0.15..0.85 -> 1.0
-            areaRatio in 0.08..0.94 -> 0.75
-            else -> 0.40
+            areaRatio in 0.10..0.70 -> 1.0
+            areaRatio in 0.06..0.82 -> 0.85
+            areaRatio in 0.82..0.94 -> 0.35
+            else -> 0.25
+        }
+
+        val borderMargin = min(w, h) * 0.03
+        var borderHits = 0
+        for (p in quad) {
+            if (p.x < borderMargin || p.x > w - borderMargin ||
+                p.y < borderMargin || p.y > h - borderMargin
+            ) borderHits++
+        }
+        val borderPenalty = when (borderHits) {
+            0 -> 1.0; 1 -> 0.92; 2 -> 0.70; 3 -> 0.45; else -> 0.25
         }
 
         val contourMatchScore = if (contourArea > 0.0) {
@@ -338,14 +345,13 @@ object EdgeDetector {
 
         val docRecScore = recognition.confidence.toDouble()
 
-        // Weighted Additive Model
         val totalScore = (
-            0.15 * docRecScore +
+            0.10 * docRecScore +
             config.weightArea * areaScore +
             config.weightGeometry * geom.score +
-            config.weightEdge * edgeSupport +
+            (config.weightEdge + 0.08) * edgeSupport +
             config.weightContour * contourMatchScore
-        )
+        ) * borderPenalty
 
         return totalScore.coerceIn(0.0, 1.0)
     }
@@ -354,13 +360,8 @@ object EdgeDetector {
         val lines = Mat()
         try {
             Imgproc.HoughLinesP(
-                edgeMap,
-                lines,
-                config.houghRho,
-                config.houghTheta,
-                config.houghThreshold,
-                config.houghMinLineLength.toDouble(),
-                config.houghMaxLineGap.toDouble()
+                edgeMap, lines, config.houghRho, config.houghTheta, config.houghThreshold,
+                config.houghMinLineLength.toDouble(), config.houghMaxLineGap.toDouble()
             )
 
             val count = lines.rows()
@@ -376,7 +377,6 @@ object EdgeDetector {
                 segments.add(LineSeg(Point(x1, y1), Point(x2, y2), normAngle))
             }
 
-            // Cluster into two orthogonal dominant angle bins (separated by ~90°)
             val groupA = ArrayList<LineSeg>()
             val groupB = ArrayList<LineSeg>()
 

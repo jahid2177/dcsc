@@ -123,8 +123,15 @@ object DocumentRecognition {
             val shapeScore = bestRectangularity.coerceIn(0f, 1f)
             val lightingScore = if (meanLum in 25.0..240.0) 1.0f else 0.5f
 
-            val confidence = (0.40f * areaScore + 0.30f * shapeScore + 0.20f * contrastScore + 0.10f * lightingScore).coerceIn(0f, 1f)
-            val isDoc = confidence >= 0.45f && areaFraction >= 0.05f
+            // Modern scoring: prioritise area + rectangularity the way ML Kit /
+            // Adobe Scan do — contrast is secondary so low-light paper still passes.
+            val confidence = (
+                0.38f * areaScore +
+                0.32f * shapeScore +
+                0.18f * contrastScore +
+                0.12f * lightingScore
+            ).coerceIn(0f, 1f)
+            val isDoc = confidence >= 0.38f && areaFraction >= 0.04f
 
             return DocumentRecognitionResult(
                 isDocument = isDoc,
