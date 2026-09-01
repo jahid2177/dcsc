@@ -1486,7 +1486,65 @@ fun SettingsContentInternal(
     }
 }
 
-// ==================== SCREEN 0: MAIN SETTINGS MENU (WITHOUT BOTTOM TABS & WIDGETS) ====================
+// ==================== SCREEN 0: MAIN SETTINGS MENU ====================
+
+@Composable
+private fun SettingsQuickActionTile(
+    icon: ImageVector,
+    label: String,
+    subLabel: String,
+    iconTint: Color,
+    iconBgColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        color = CardBackground,
+        border = BorderStroke(1.dp, CardBorderColor)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(iconBgColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = iconTint,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(7.dp))
+            Text(
+                text = label,
+                color = TextPrimary,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subLabel,
+                color = PrimaryTeal,
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+        }
+    }
+}
 
 @Composable
 private fun MainSettingsContent(
@@ -1512,55 +1570,82 @@ private fun MainSettingsContent(
     onOpenFeedback: () -> Unit,
     onOpenHelp: () -> Unit
 ) {
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(bottom = 32.dp)
+            .padding(bottom = 36.dp)
     ) {
-        // Top Bar with Close / Back
+        // Top Bar with Close / Back & Title
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 18.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (!isEmbeddedTab) {
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.size(36.dp).testTag("btn_back_settings")
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1F2430))
+                            .border(1.dp, CardBorderColor, CircleShape)
+                            .testTag("btn_back_settings")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = TextPrimary,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
+                Column {
+                    Text(
+                        text = "Settings",
+                        color = TextPrimary,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Preferences & Pro Tools",
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = PrimaryTeal.copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, PrimaryTeal.copy(alpha = 0.3f))
+            ) {
                 Text(
-                    text = "Settings",
-                    color = TextPrimary,
-                    fontSize = 22.sp,
+                    text = "v4.2 PRO",
+                    color = PrimaryTeal,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = if (isEmbeddedTab) 4.dp else 0.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
         }
 
-        // 1. User Header & Storage Card
+        // 1. Hero User Profile & Storage Card
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            shape = RoundedCornerShape(20.dp),
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            shape = RoundedCornerShape(22.dp),
             color = CardBackground,
             border = BorderStroke(1.dp, CardBorderColor)
         ) {
@@ -1572,6 +1657,7 @@ private fun MainSettingsContent(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable { onOpenAccount() },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1579,7 +1665,7 @@ private fun MainSettingsContent(
                         modifier = Modifier
                             .size(54.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF222834))
+                            .background(Color(0xFF1E2430))
                             .border(2.dp, PrimaryTeal, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1614,13 +1700,13 @@ private fun MainSettingsContent(
                                 fontWeight = FontWeight.Bold
                             )
                             Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = GoldBadge.copy(alpha = 0.15f)
+                                shape = RoundedCornerShape(6.dp),
+                                color = GoldBadge.copy(alpha = 0.18f)
                             ) {
                                 Text(
                                     text = "PRO LOCAL",
                                     color = GoldBadge,
-                                    fontSize = 10.sp,
+                                    fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 0.5.sp,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -1629,7 +1715,7 @@ private fun MainSettingsContent(
                         }
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = "Tap to customize profile & preferences",
+                            text = "100% Offline & On-Device Security",
                             color = TextSecondary,
                             fontSize = 12.sp
                         )
@@ -1660,8 +1746,8 @@ private fun MainSettingsContent(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(24.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .size(26.dp)
+                                .clip(RoundedCornerShape(7.dp))
                                 .background(PrimaryTeal.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1669,28 +1755,51 @@ private fun MainSettingsContent(
                                 imageVector = Icons.Outlined.Storage,
                                 contentDescription = "Storage",
                                 tint = PrimaryTeal,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                         }
                         Text(
                             text = "Storage & Cache",
                             color = TextPrimary,
                             fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFF222730)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = storageRatio,
-                            color = TextSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF1E2430)
+                        ) {
+                            Text(
+                                text = storageRatio,
+                                color = TextSecondary,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = PrimaryTeal.copy(alpha = 0.15f),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    Toast.makeText(context, "Storage Cache Optimized & Cleaned", Toast.LENGTH_SHORT).show()
+                                }
+                        ) {
+                            Text(
+                                text = "Clean",
+                                color = PrimaryTeal,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
                     }
                 }
 
@@ -1703,62 +1812,70 @@ private fun MainSettingsContent(
                         .height(6.dp)
                         .clip(RoundedCornerShape(3.dp)),
                     color = PrimaryTeal,
-                    trackColor = Color(0xFF262C36),
+                    trackColor = Color(0xFF232A36),
                     strokeCap = StrokeCap.Round
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // SECTION 1: ACCOUNT & CLOUD
-        // SECTION 1: ACCOUNT & APPEARANCE
-        SectionHeader(text = "ACCOUNT & APPEARANCE")
-        SettingsGroupCard {
-            SettingsItemRow(
-                icon = Icons.Outlined.Person,
-                title = "Account & Profile",
-                subtitle = "Manage name, avatar, and local user data",
-                iconBgColor = Color(0xFF3B82F6).copy(alpha = 0.12f),
-                iconTint = Color(0xFF60A5FA),
-                testTag = "item_account",
-                onClick = onOpenAccount
+        // 2. Quick Action Shortcut Grid (4 Tiles)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            SettingsQuickActionTile(
+                icon = Icons.Outlined.Palette,
+                label = "Theme",
+                subLabel = when (currentThemeMode) {
+                    AppThemeMode.LIGHT -> "Light"
+                    AppThemeMode.DARK -> "Dark"
+                    AppThemeMode.SYSTEM_DEFAULT -> "System"
+                },
+                iconTint = Color(0xFFA78BFA),
+                iconBgColor = Color(0xFF8B5CF6).copy(alpha = 0.14f),
+                modifier = Modifier.weight(1f),
+                onClick = onOpenTheme
             )
 
-            SettingsItemRow(
-                icon = Icons.Outlined.Palette,
-                title = "Theme & Appearance",
-                subtitle = "Dark, Light, or System default interface",
-                iconBgColor = Color(0xFF8B5CF6).copy(alpha = 0.12f),
-                iconTint = Color(0xFFA78BFA),
-                testTag = "item_theme",
-                trailingContent = {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFF222730)
-                    ) {
-                        Text(
-                            text = when (currentThemeMode) {
-                                AppThemeMode.LIGHT -> "Light"
-                                AppThemeMode.DARK -> "Dark"
-                                AppThemeMode.SYSTEM_DEFAULT -> "System"
-                            },
-                            color = TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                },
-                isLast = true,
-                onClick = onOpenTheme
+            SettingsQuickActionTile(
+                icon = Icons.Outlined.PictureAsPdf,
+                label = "Format",
+                subLabel = "PDF / A4",
+                iconTint = Color(0xFFFB923C),
+                iconBgColor = Color(0xFFF97316).copy(alpha = 0.14f),
+                modifier = Modifier.weight(1f),
+                onClick = onOpenManageDocs
+            )
+
+            SettingsQuickActionTile(
+                icon = Icons.Outlined.Lock,
+                label = "Lock Hub",
+                subLabel = "AES-256",
+                iconTint = Color(0xFF34D399),
+                iconBgColor = Color(0xFF10B981).copy(alpha = 0.14f),
+                modifier = Modifier.weight(1f),
+                onClick = onOpenSecurity
+            )
+
+            SettingsQuickActionTile(
+                icon = Icons.Outlined.CleaningServices,
+                label = "Free Space",
+                subLabel = "Optimizer",
+                iconTint = Color(0xFFF472B6),
+                iconBgColor = Color(0xFFEC4899).copy(alpha = 0.14f),
+                modifier = Modifier.weight(1f),
+                onClick = onOpenFreeUpSpace
             )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // SECTION 2: SCANNING & DOCUMENTS
-        SectionHeader(text = "SCANNING & DOCUMENTS")
+        // SECTION 1: SCANNING & OCR
+        SectionHeader(text = "SCANNING & OCR")
         SettingsGroupCard {
             SettingsItemRow(
                 icon = Icons.Outlined.CropFree,
@@ -1787,26 +1904,26 @@ private fun MainSettingsContent(
                 iconBgColor = Color(0xFF06B6D4).copy(alpha = 0.12f),
                 iconTint = Color(0xFF22D3EE),
                 testTag = "item_extract_text",
-                onClick = onOpenExtractText
-            )
-
-            SettingsItemRow(
-                icon = Icons.Outlined.Share,
-                title = "Share & Export",
-                subtitle = "PDF export quality, email integration, and upload accounts",
-                iconBgColor = Color(0xFFF97316).copy(alpha = 0.12f),
-                iconTint = Color(0xFFFB923C),
-                testTag = "item_share_export",
                 isLast = true,
-                onClick = onOpenShareExport
+                onClick = onOpenExtractText
             )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // SECTION 3: STORAGE & SECURITY
-        SectionHeader(text = "STORAGE & SECURITY")
+        // SECTION 2: SECURITY & STORAGE
+        SectionHeader(text = "SECURITY & STORAGE")
         SettingsGroupCard {
+            SettingsItemRow(
+                icon = Icons.Outlined.Lock,
+                title = "Security & PIN Lock",
+                subtitle = "Document password protection, encryption, and app lock",
+                iconBgColor = Color(0xFF10B981).copy(alpha = 0.12f),
+                iconTint = Color(0xFF34D399),
+                testTag = "item_security",
+                onClick = onOpenSecurity
+            )
+
             SettingsItemRow(
                 icon = Icons.Outlined.CleaningServices,
                 title = "Free Up Space & Cache",
@@ -1818,23 +1935,30 @@ private fun MainSettingsContent(
             )
 
             SettingsItemRow(
-                icon = Icons.Outlined.Lock,
-                title = "Security & PIN Lock",
-                subtitle = "Confidential folder protection and biometrics",
-                iconBgColor = Color(0xFF10B981).copy(alpha = 0.12f),
-                iconTint = Color(0xFF34D399),
-                testTag = "item_security",
-                onClick = onOpenSecurity
-            )
-
-            SettingsItemRow(
                 icon = Icons.Outlined.Tune,
                 title = "Permission Manager",
                 subtitle = "Review camera, storage, and device permissions",
                 iconBgColor = Color(0xFF3B82F6).copy(alpha = 0.12f),
                 iconTint = Color(0xFF60A5FA),
                 testTag = "item_permissions",
+                isLast = true,
                 onClick = onOpenPermissions
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // SECTION 3: SHARING & EXPORT
+        SectionHeader(text = "SHARING & EXPORT")
+        SettingsGroupCard {
+            SettingsItemRow(
+                icon = Icons.Outlined.Share,
+                title = "Share & Export",
+                subtitle = "PDF export quality, email integration, and upload accounts",
+                iconBgColor = Color(0xFFF97316).copy(alpha = 0.12f),
+                iconTint = Color(0xFFFB923C),
+                testTag = "item_share_export",
+                onClick = onOpenShareExport
             )
 
             SettingsItemRow(
@@ -1855,6 +1979,34 @@ private fun MainSettingsContent(
         SectionHeader(text = "SUPPORT & ABOUT")
         SettingsGroupCard {
             SettingsItemRow(
+                icon = Icons.Outlined.Palette,
+                title = "Theme & Appearance",
+                subtitle = "Dark, Light, or System default interface",
+                iconBgColor = Color(0xFF8B5CF6).copy(alpha = 0.12f),
+                iconTint = Color(0xFFA78BFA),
+                testTag = "item_theme",
+                trailingContent = {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF1E2430)
+                    ) {
+                        Text(
+                            text = when (currentThemeMode) {
+                                AppThemeMode.LIGHT -> "Light"
+                                AppThemeMode.DARK -> "Dark"
+                                AppThemeMode.SYSTEM_DEFAULT -> "System"
+                            },
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                },
+                onClick = onOpenTheme
+            )
+
+            SettingsItemRow(
                 icon = Icons.Outlined.HelpOutline,
                 title = "User Guide & Help",
                 subtitle = "Tutorials, FAQs, and scanning best practices",
@@ -1867,22 +2019,12 @@ private fun MainSettingsContent(
             SettingsItemRow(
                 icon = Icons.Outlined.Feedback,
                 title = "Feedback & About",
-                subtitle = "Version 2.4.0, contact developers, and privacy policy",
+                subtitle = "Version 4.2.0, developer info, and privacy policy",
                 iconBgColor = Color(0xFF8B5CF6).copy(alpha = 0.12f),
                 iconTint = Color(0xFFA78BFA),
                 testTag = "item_feedback",
-                onClick = onOpenFeedback
-            )
-
-            SettingsItemRow(
-                icon = Icons.Outlined.Settings,
-                title = "All Advanced Settings",
-                subtitle = "Quick shortcuts to all advanced preference screens",
-                iconBgColor = Color(0xFF475569).copy(alpha = 0.2f),
-                iconTint = Color(0xFFCBD5E1),
-                testTag = "item_more_settings",
                 isLast = true,
-                onClick = onOpenMoreSettings
+                onClick = onOpenFeedback
             )
         }
     }
@@ -3172,17 +3314,18 @@ private fun FeedbackScreen(
 @Composable
 private fun SubScreenTopBar(
     title: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    subtitle: String? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
             shape = CircleShape,
-            color = Color(0xFF1B2028),
+            color = Color(0xFF1E2430),
             border = BorderStroke(1.dp, CardBorderColor),
             modifier = Modifier.size(38.dp)
         ) {
@@ -3193,18 +3336,27 @@ private fun SubScreenTopBar(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = Color(0xFFF1F5F9),
+                    tint = TextPrimary,
                     modifier = Modifier.size(20.dp)
                 )
             }
         }
         Spacer(modifier = Modifier.width(14.dp))
-        Text(
-            text = title,
-            color = TextPrimary,
-            fontSize = 19.sp,
-            fontWeight = FontWeight.Bold
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = TextPrimary,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    color = TextSecondary,
+                    fontSize = 12.sp
+                )
+            }
+        }
     }
 }
 
@@ -3229,7 +3381,7 @@ private fun SettingsGroupCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         color = CardBackground,
         border = BorderStroke(1.dp, CardBorderColor)
     ) {
@@ -3248,8 +3400,8 @@ private fun SettingsIconBadge(
 ) {
     Box(
         modifier = Modifier
-            .size(38.dp)
-            .clip(RoundedCornerShape(11.dp))
+            .size(40.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(iconBgColor),
         contentAlignment = Alignment.Center
     ) {

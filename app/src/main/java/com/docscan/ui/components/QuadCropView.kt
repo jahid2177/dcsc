@@ -268,8 +268,8 @@ fun QuadCropView(
             }
 
             // 3. Draw crop polygon lines
-            val cropBorderColor = Color(0xFF14B8A6) // CamScanner Turquoise
-            val gridColor = Color(0x9914B8A6)
+            val cropBorderColor = Color(0xFF1A73E8) // ML Kit Blue
+            val gridColor = Color(0x991A73E8)
 
             // Outer crop polygon line
             drawPath(
@@ -362,7 +362,7 @@ private fun DrawScope.drawCornerHandle(point: Offset, isActive: Boolean, isSelec
     // Outer glow for active/selected
     if (isActive || isSelected) {
         drawCircle(
-            color = Color(0x6614B8A6),
+            color = Color(0x661A73E8),
             radius = radius + 9f,
             center = point
         )
@@ -382,7 +382,7 @@ private fun DrawScope.drawCornerHandle(point: Offset, isActive: Boolean, isSelec
     )
     // Turquoise inner dot / border
     drawCircle(
-        color = if (isActive || isSelected) Color(0xFF0F766E) else Color(0xFF14B8A6),
+        color = if (isActive || isSelected) Color(0xFF0F766E) else Color(0xFF1A73E8),
         radius = radius,
         center = point,
         style = Stroke(width = if (isActive || isSelected) 5f else 4f)
@@ -410,7 +410,7 @@ private fun DrawScope.drawEdgePillHandle(point: Offset, isHorizontal: Boolean, i
     )
     // Turquoise stroke
     drawRoundRect(
-        color = if (isActive) Color(0xFF0F766E) else Color(0xFF14B8A6),
+        color = if (isActive) Color(0xFF0F766E) else Color(0xFF1A73E8),
         topLeft = topLeft,
         size = Size(width, height),
         cornerRadius = CornerRadius(6f, 6f),
@@ -503,7 +503,7 @@ private fun DrawScope.drawMagnifierLoupe(
 
         // Center target dot
         drawCircle(
-            color = Color(0xFF14B8A6),
+            color = Color(0xFF1A73E8),
             radius = 5f,
             center = loupeCenter
         )
@@ -517,7 +517,7 @@ private fun DrawScope.drawMagnifierLoupe(
         style = Stroke(width = 4f)
     )
     drawCircle(
-        color = Color(0xFF14B8A6),
+        color = Color(0xFF1A73E8),
         radius = loupeRadius + 2f,
         center = loupeCenter,
         style = Stroke(width = 2f)

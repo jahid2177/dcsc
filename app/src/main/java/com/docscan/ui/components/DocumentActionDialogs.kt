@@ -41,6 +41,9 @@ import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import com.docscan.security.DocumentLockManager
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -1301,10 +1304,20 @@ fun MoveFolderDialog(
 @Composable
 fun LockDocumentDialog(
     docTitle: String,
-    onDismiss: () -> Unit
+    docId: Long? = null,
+    onDismiss: () -> Unit,
+    onLockChanged: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    var pin by remember { mutableStateOf("") }
+    val isLocked = remember(docId) {
+        if (docId != null) DocumentLockManager.isDocumentLocked(docId) else false
+    }
+
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var oldPassword by remember { mutableStateOf("") }
+    var isPasswordVisible by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -1312,46 +1325,224 @@ fun LockDocumentDialog(
             color = DarkDialogBg,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFF87171), modifier = Modifier.size(36.dp))
+            Column(
+                modifier = Modifier
+                    .padding(22.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = TealAccent,
+                    modifier = Modifier.size(36.dp)
+                )
+
                 Spacer(modifier = Modifier.height(10.dp))
-                Text("Lock Document", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+
+                Text(
+                    text = if (isLocked) "Document Protection" else "Lock Document",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Set a 4-digit security PIN for $docTitle", color = DarkTextSecondary, fontSize = 12.sp, textAlign = TextAlign.Center)
+
+                Text(
+                    text = if (isLocked)
+                        "This document is encrypted with a password. You can update the password or remove protection."
+                    else
+                        "Encrypt $docTitle with a password to prevent unauthorized viewing or sharing.",
+                    color = DarkTextSecondary,
+                    fontSize = 12.5.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 17.sp
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) pin = it },
-                    placeholder = { Text("Enter 4-digit PIN", color = DarkTextSecondary) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = TealAccent,
-                        unfocusedBorderColor = Color(0xFF454545)
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                if (isLocked) {
+                    // Unlock / Remove Protection option
+                    OutlinedTextField(
+                        value = oldPassword,
+                        onValueChange = {
+                            oldPassword = it
+                            errorMessage = null
+                        },
+                        placeholder = { Text("Enter current password to remove", color = DarkTextSecondary, fontSize = 13.sp) },
+                        visualTransformation = if (isPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = null,
+                                    tint = DarkTextSecondary
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = TealAccent,
+                            unfocusedBorderColor = Color(0xFF454545)
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                    if (errorMessage != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = errorMessage ?: "",
+                            color = Color(0xFFEF4444),
+                            fontSize = 12.sp
+                        )
+                    }
 
-                Button(
-                    onClick = {
-                        if (pin.length == 4) {
-                            Toast.makeText(context, "Document locked with PIN", Toast.LENGTH_SHORT).show()
-                            onDismiss()
-                        } else {
-                            Toast.makeText(context, "Please enter a 4-digit PIN", Toast.LENGTH_SHORT).show()
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D3240)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Cancel", color = Color.White)
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = TealAccent),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Lock Document", color = Color.Black, fontWeight = FontWeight.Bold)
+
+                        Button(
+                            onClick = {
+                                if (docId != null) {
+                                    val success = DocumentLockManager.removePassword(context, docId, oldPassword)
+                                    if (success) {
+                                        Toast.makeText(context, "Password protection removed", Toast.LENGTH_SHORT).show()
+                                        onLockChanged()
+                                        onDismiss()
+                                    } else {
+                                        errorMessage = "Incorrect current password"
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1.3f)
+                        ) {
+                            Text("Remove Lock", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    // Set New Password
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = {
+                            password = it
+                            errorMessage = null
+                        },
+                        placeholder = { Text("Enter password (min 6 chars)", color = DarkTextSecondary, fontSize = 13.sp) },
+                        visualTransformation = if (isPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = null,
+                                    tint = DarkTextSecondary
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = TealAccent,
+                            unfocusedBorderColor = Color(0xFF454545)
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = {
+                            confirmPassword = it
+                            errorMessage = null
+                        },
+                        placeholder = { Text("Confirm password", color = DarkTextSecondary, fontSize = 13.sp) },
+                        visualTransformation = if (isPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = TealAccent,
+                            unfocusedBorderColor = Color(0xFF454545)
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (errorMessage != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = errorMessage ?: "",
+                            color = Color(0xFFEF4444),
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D3240)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Cancel", color = Color.White)
+                        }
+
+                        Button(
+                            onClick = {
+                                if (password.trim().length < 6) {
+                                    errorMessage = "Password must be at least 6 characters"
+                                    return@Button
+                                }
+                                if (password.trim() != confirmPassword.trim()) {
+                                    errorMessage = "Passwords do not match"
+                                    return@Button
+                                }
+
+                                if (docId != null) {
+                                    val success = DocumentLockManager.lockDocument(context, docId, password)
+                                    if (success) {
+                                        Toast.makeText(context, "Document locked successfully", Toast.LENGTH_SHORT).show()
+                                        onLockChanged()
+                                        onDismiss()
+                                    } else {
+                                        errorMessage = "Lock encryption failed. Try again."
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Document locked", Toast.LENGTH_SHORT).show()
+                                    onDismiss()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = TealAccent),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Lock", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }
