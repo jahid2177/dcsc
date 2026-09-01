@@ -15,14 +15,17 @@ import com.docscan.ui.screens.CompressPdfScreen
 import com.docscan.ui.screens.CropFilterScreen
 import com.docscan.ui.screens.CropScreen
 import com.docscan.ui.screens.DocumentDetailScreen
+import com.docscan.ui.screens.DocumentLockScreen
 import com.docscan.ui.screens.DocumentPreviewScreen
 import com.docscan.ui.screens.ExtractPdfPagesScreen
 import com.docscan.ui.screens.ExtractTextScreen
 import com.docscan.ui.screens.HomeScreen
+import com.docscan.ui.screens.ImageResizerScreen
 import com.docscan.ui.screens.MergeFilesScreen
 import com.docscan.ui.screens.PassportPhotoMakerScreen
 import com.docscan.ui.screens.PdfToExcelScreen
 import com.docscan.ui.screens.PdfToImageScreen
+import com.docscan.ui.screens.PdfToLongImageScreen
 import com.docscan.ui.screens.PdfToWordScreen
 import com.docscan.ui.screens.WordReaderScreen
 import com.docscan.ui.screens.ExcelReaderScreen
@@ -68,6 +71,10 @@ sealed class Screen(val route: String) {
     object PdfToImageDoc : Screen("pdf_to_image/{docId}") {
         fun createRoute(docId: Long) = "pdf_to_image/$docId"
     }
+    object PdfToLongImage : Screen("pdf_to_long_image")
+    object PdfToLongImageDoc : Screen("pdf_to_long_image/{docId}") {
+        fun createRoute(docId: Long) = "pdf_to_long_image/$docId"
+    }
     object Camera : Screen("camera")
     object CameraAppend : Screen("camera/{docId}") {
         fun createRoute(docId: Long) = "camera/$docId"
@@ -84,6 +91,10 @@ sealed class Screen(val route: String) {
         fun createRoute(pageId: Long) = "single_page_editor/$pageId"
     }
     object PassportPhotoMaker : Screen("passport_photo_maker")
+    object ImageResizer : Screen("image_resizer")
+    object DocumentLock : Screen("document_lock?docId={docId}") {
+        fun createRoute(docId: Long? = null): String = if (docId != null) "document_lock?docId=$docId" else "document_lock"
+    }
     object WordReader : Screen("word_reader?filePath={filePath}&uri={uri}&title={title}") {
         fun createRoute(filePath: String? = null, uri: String? = null, title: String? = null): String {
             val ep = java.net.URLEncoder.encode(filePath ?: "", "UTF-8")
@@ -199,11 +210,23 @@ fun AppNavGraph(
                 onNavigateToPdfToImagesDoc = { docId ->
                     navController.navigate(Screen.PdfToImageDoc.createRoute(docId))
                 },
+                onNavigateToPdfToLongImage = {
+                    navController.navigate(Screen.PdfToLongImage.route)
+                },
+                onNavigateToPdfToLongImageDoc = { docId ->
+                    navController.navigate(Screen.PdfToLongImageDoc.createRoute(docId))
+                },
                 onNavigateToWordReader = { filePath ->
                     navController.navigate(Screen.WordReader.createRoute(filePath = filePath))
                 },
                 onNavigateToExcelReader = { filePath ->
                     navController.navigate(Screen.ExcelReader.createRoute(filePath = filePath))
+                },
+                onNavigateToImageResizer = {
+                    navController.navigate(Screen.ImageResizer.route)
+                },
+                onNavigateToLock = { docId ->
+                    navController.navigate(Screen.DocumentLock.createRoute(docId))
                 }
             )
         }
@@ -670,6 +693,43 @@ fun AppNavGraph(
             )
         }
 
+        // PDF to Long Image Dedicated Workflow (State 1: Selection & Device Import)
+        composable(Screen.PdfToLongImage.route) {
+            val documents by viewModel.documentsList.collectAsStateWithLifecycle()
+            PdfToLongImageScreen(
+                viewModel = viewModel,
+                initialDocument = null,
+                allDocuments = documents,
+                onNavigateToDocumentDetail = { docId ->
+                    navController.navigate(Screen.DocumentDetail.createRoute(docId))
+                },
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // PDF to Long Image Dedicated Workflow for specific Document
+        composable(
+            route = Screen.PdfToLongImageDoc.route,
+            arguments = listOf(navArgument("docId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val docId = backStackEntry.arguments?.getLong("docId") ?: 0L
+            val documents by viewModel.documentsList.collectAsStateWithLifecycle()
+            val initialDoc = documents.firstOrNull { it.id == docId }
+            PdfToLongImageScreen(
+                viewModel = viewModel,
+                initialDocument = initialDoc,
+                allDocuments = documents,
+                onNavigateToDocumentDetail = { targetDocId ->
+                    navController.navigate(Screen.DocumentDetail.createRoute(targetDocId))
+                },
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
         // Advanced Word Reader Screen
         composable(
             route = Screen.WordReader.route,
@@ -743,6 +803,37 @@ fun AppNavGraph(
                 initialTitle = title,
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Image Resizer Studio Screen
+        composable(Screen.ImageResizer.route) {
+            ImageResizerScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Document Lock Screen (Tools -> Lock)
+        composable(
+            route = Screen.DocumentLock.route,
+            arguments = listOf(
+                navArgument("docId") {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                }
+            )
+        ) { backStackEntry ->
+            val docIdArg = backStackEntry.arguments?.getLong("docId") ?: -1L
+            val initialDocId = if (docIdArg > 0L) docIdArg else null
+            DocumentLockScreen(
+                viewModel = viewModel,
+                initialDocId = initialDocId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDocumentDetail = { docId ->
+                    navController.navigate(Screen.DocumentDetail.createRoute(docId)) {
+                        popUpTo(Screen.Home.route)
+                    }
+                }
             )
         }
     }
