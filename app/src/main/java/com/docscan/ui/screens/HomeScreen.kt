@@ -211,6 +211,7 @@ import com.docscan.data.model.DocumentEntity
 import com.docscan.data.model.PageEntity
 import com.docscan.data.model.ScanMode
 import com.docscan.data.model.ScannerFeatureMode
+import com.docscan.security.DocumentLockManager
 import com.docscan.ui.components.AiToExcelDialog
 import com.docscan.ui.components.AiToWordDialog
 import com.docscan.ui.components.CompressDialog
@@ -228,6 +229,7 @@ import com.docscan.ui.components.SignatureDialog
 import com.docscan.ui.components.SplitPdfDialog
 import com.docscan.ui.components.TextToPdfDialog
 import com.docscan.ui.components.TranslateDialog
+import com.docscan.ui.components.UnlockDocumentDialog
 import com.docscan.ui.components.WatermarkDialog
 import com.docscan.ui.screens.PdfToWordScreen
 import com.docscan.ui.screens.PdfToExcelScreen
@@ -282,8 +284,12 @@ fun HomeScreen(
     onNavigateToToExcelDoc: (Long) -> Unit = {},
     onNavigateToPdfToImages: () -> Unit = {},
     onNavigateToPdfToImagesDoc: (Long) -> Unit = {},
+    onNavigateToPdfToLongImage: () -> Unit = {},
+    onNavigateToPdfToLongImageDoc: (Long) -> Unit = {},
     onNavigateToWordReader: (String?) -> Unit = {},
-    onNavigateToExcelReader: (String?) -> Unit = {}
+    onNavigateToExcelReader: (String?) -> Unit = {},
+    onNavigateToImageResizer: () -> Unit = {},
+    onNavigateToLock: (Long?) -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -297,6 +303,7 @@ fun HomeScreen(
     var selectedNavTab by remember { mutableStateOf("Home") } // "Home", "Files", "Tools", "Me"
 
     // Dialog & Flow States
+    var docForUnlock by remember { mutableStateOf<DocumentEntity?>(null) }
     var documentToRename by remember { mutableStateOf<DocumentEntity?>(null) }
     var documentToMove by remember { mutableStateOf<DocumentEntity?>(null) }
     var documentToExportPdf by remember { mutableStateOf<DocumentEntity?>(null) }
@@ -332,7 +339,6 @@ fun HomeScreen(
     var docForOcrText by remember { mutableStateOf<DocumentEntity?>(null) }
     var showDocSelectForTool by remember { mutableStateOf<String?>(null) }
     var showAiChatDialog by remember { mutableStateOf(false) }
-    var showLongImageDialog by remember { mutableStateOf(false) }
 
     val folders = listOf("All", "Starred", "Business", "ID Cards", "Receipts", "Personal", "Notes")
 
@@ -655,7 +661,11 @@ fun HomeScreen(
                             if (isSelectionMode) {
                                 viewModel.toggleDocSelection(doc.id)
                             } else {
-                                onNavigateToDocumentDetail(doc.id)
+                                if (DocumentLockManager.isLockedAndGuarded(context, doc.id)) {
+                                    docForUnlock = doc
+                                } else {
+                                    onNavigateToDocumentDetail(doc.id)
+                                }
                             }
                         },
                         onDocumentLongClick = { doc ->
@@ -688,7 +698,11 @@ fun HomeScreen(
                             if (isSelectionMode) {
                                 viewModel.toggleDocSelection(doc.id)
                             } else {
-                                onNavigateToDocumentDetail(doc.id)
+                                if (DocumentLockManager.isLockedAndGuarded(context, doc.id)) {
+                                    docForUnlock = doc
+                                } else {
+                                    onNavigateToDocumentDetail(doc.id)
+                                }
                             }
                         },
                         onDocumentLongClick = { doc ->
@@ -727,8 +741,8 @@ fun HomeScreen(
                             onNavigateToToExcel()
                         },
                         onPdfToImages = onNavigateToPdfToImages,
-                        onPdfToLongImage = { showLongImageDialog = true },
-                        onImageResizer = { showImageResizer = true },
+                        onPdfToLongImage = onNavigateToPdfToLongImage,
+                        onImageResizer = { onNavigateToImageResizer() },
                         onResizePdf = {
                             if (documents.isNotEmpty()) {
                                 showDocSelectForTool = "Resize PDF"
@@ -782,12 +796,7 @@ fun HomeScreen(
                             onNavigateToReorderPages()
                         },
                         onLock = {
-                            if (documents.isNotEmpty()) {
-                                showDocSelectForTool = "Protect PDF"
-                            } else {
-                                Toast.makeText(context, "Scan or import a document first", Toast.LENGTH_SHORT).show()
-                                onNavigateToCamera()
-                            }
+                            onNavigateToLock(null)
                         },
                         onCompress = {
                             onNavigateToCompressPdf()
@@ -1310,44 +1319,6 @@ fun HomeScreen(
         }
     }
 
-    // Long Image Stitcher Dialog
-    if (showLongImageDialog) {
-        AlertDialog(
-            onDismissRequest = { showLongImageDialog = false },
-            title = { Text("PDF to Long Image", color = Color.White) },
-            containerColor = Color(0xFF242426),
-            text = {
-                Text(
-                    "Stitch all pages of a selected document into a single continuous vertical panoramic image for easy sharing on social media or messaging apps.",
-                    color = ThemeTextMuted,
-                    fontSize = 13.sp
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showLongImageDialog = false
-                        val firstDoc = documents.firstOrNull()
-                        if (firstDoc != null) {
-                            viewModel.exportAllPagesAsImages(firstDoc)
-                        } else {
-                            Toast.makeText(context, "Scan a document first", Toast.LENGTH_SHORT).show()
-                            onNavigateToCamera()
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = ThemeAccentTeal)
-                ) {
-                    Text("Create Long Image", color = Color.White)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLongImageDialog = false }) {
-                    Text("Cancel", color = Color.Gray)
-                }
-            }
-        )
-    }
-
     // PDF to Word Screen Dialog
     if (showPdfToWordScreen) {
         Dialog(
@@ -1689,6 +1660,19 @@ fun HomeScreen(
                 }
                 docForSignature = null
                 onNavigateToDocumentDetail(doc.id)
+            }
+        )
+    }
+
+    // Unlock Document Dialog (Password protection check when opening document)
+    docForUnlock?.let { doc ->
+        UnlockDocumentDialog(
+            document = doc,
+            onDismiss = { docForUnlock = null },
+            onUnlockSuccess = {
+                val targetDocId = doc.id
+                docForUnlock = null
+                onNavigateToDocumentDetail(targetDocId)
             }
         )
     }
@@ -2366,26 +2350,14 @@ private fun ToolsContent(
             ToolCircleItem("Image Resizer", Icons.Default.Crop, Color(0xFFEC4899)) {
                 onImageResizer()
             },
-            ToolCircleItem("Resize PDF", Icons.Default.AspectRatio, Color(0xFF06B6D4)) {
-                onResizePdf()
-            },
             ToolCircleItem("Split PDF", Icons.Default.CallSplit, Color(0xFF3B82F6)) {
                 onSplitPdf()
-            },
-            ToolCircleItem("Rotate PDF", Icons.Default.RotateRight, Color(0xFFF59E0B)) {
-                onRotatePdf()
             },
             ToolCircleItem("Sign", Icons.Default.Draw, Color(0xFF00BFA5)) {
                 onSign()
             },
             ToolCircleItem("Add Watermark", Icons.Default.BrandingWatermark, Color(0xFF3B82F6)) {
                 onAddWatermark()
-            },
-            ToolCircleItem("Smart Erase", Icons.Default.AutoFixHigh, Color(0xFF10B981)) {
-                onSmartErase()
-            },
-            ToolCircleItem("Erase Marks", Icons.Default.LayersClear, Color(0xFF8B5CF6)) {
-                onEraseMarks()
             },
             ToolCircleItem("Extract PDF Pages", Icons.Default.CallSplit, Color(0xFF3B82F6)) {
                 onExtractPdfPages()
@@ -2487,7 +2459,7 @@ private fun ToolsContent(
                     Box(modifier = Modifier.weight(1f)) {
                         if (searchQuery.isEmpty()) {
                             Text(
-                                "Search tools (e.g. Word, Erase, Sign)...",
+                                "Search tools (e.g. Word, Sign, Excel)...",
                                 color = ThemeTextMuted,
                                 fontSize = 14.sp
                             )
@@ -2829,6 +2801,24 @@ fun CamScannerDocItem(
                     )
                 }
             }
+
+            // Lock badge overlay
+            if (DocumentLockManager.isDocumentLocked(doc.id)) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(2.dp)
+                        .background(Color.Black.copy(alpha = 0.75f), CircleShape)
+                        .padding(3.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Locked",
+                        tint = Color(0xFF00BFA5),
+                        modifier = Modifier.size(11.dp)
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -2975,6 +2965,24 @@ fun CamScannerDocGridCard(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
+                }
+
+                // Lock badge overlay
+                if (DocumentLockManager.isDocumentLocked(doc.id)) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .background(Color.Black.copy(alpha = 0.75f), CircleShape)
+                            .padding(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Locked",
+                            tint = Color(0xFF00BFA5),
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
                 }
             }
 

@@ -130,6 +130,7 @@ import coil.compose.AsyncImage
 import com.docscan.data.model.DocumentEntity
 import com.docscan.data.model.PageEntity
 import com.docscan.util.PdfExportConfig
+import com.docscan.security.DocumentLockManager
 import com.docscan.ui.components.CaseSummaryDialog
 import com.docscan.ui.components.CompressDialog
 import com.docscan.ui.components.CustomDeleteConfirmationDialog
@@ -142,6 +143,7 @@ import com.docscan.ui.components.ReadModeDialog
 import com.docscan.ui.components.SignatureDialog
 import com.docscan.ui.components.TagsManagerDialog
 import com.docscan.ui.components.TranslateDialog
+import com.docscan.ui.components.UnlockDocumentDialog
 import com.docscan.ui.components.WatermarkDialog
 import com.docscan.ui.viewmodel.ScannerViewModel
 import com.docscan.util.FileUtils
@@ -1013,11 +1015,31 @@ fun DocumentDetailScreen(
         )
     }
 
+    // Session unlock state if document is password protected
+    var isUnlockedInScreen by remember { mutableStateOf(false) }
+
     // Lock Document Dialog
     if (showLockDialog) {
         LockDocumentDialog(
             docTitle = doc.title,
-            onDismiss = { showLockDialog = false }
+            docId = doc.id,
+            onDismiss = { showLockDialog = false },
+            onLockChanged = {
+                // Refresh lock status
+            }
+        )
+    }
+
+    // Guard screen with Unlock dialog if locked and not yet unlocked
+    if (!isUnlockedInScreen && DocumentLockManager.isLockedAndGuarded(context, doc.id)) {
+        UnlockDocumentDialog(
+            document = doc,
+            onDismiss = {
+                onNavigateBack()
+            },
+            onUnlockSuccess = {
+                isUnlockedInScreen = true
+            }
         )
     }
 

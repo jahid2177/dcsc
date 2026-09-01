@@ -159,11 +159,14 @@ import com.docscan.ui.components.QrHistoryBottomSheet
 import com.docscan.ui.components.QrResultBottomSheet
 import com.docscan.ui.components.QrScannerOverlay
 import com.docscan.ui.viewmodel.ScannerViewModel
+import com.docscan.scanner.BlueEdgeDetector
+import com.docscan.scanner.CameraMotionDetector
+import com.docscan.scanner.QuadTracker
+import com.docscan.ui.components.BlueEdgeOverlay
 import com.docscan.util.BarcodeAnalyzerHelper
 import com.docscan.util.CornerSmoother
-import com.docscan.util.DetectionResult
+import com.docscan.scanner.PremiumDetectionResult
 import com.docscan.util.DetectionState
-import com.docscan.util.EdgeDetector
 import com.docscan.util.FileUtils
 import com.docscan.util.MlKitDocumentScannerHelper
 import com.google.mlkit.vision.common.InputImage
@@ -254,8 +257,10 @@ fun CameraScanScreen(
     val barcodeScanner = remember { BarcodeAnalyzerHelper.createScanner() }
 
     // Real-time edge detection frame state
+    // Start with EMPTY corners so no blue box is drawn until a real document
+    // is found while the camera is held steady.
     var detectedState by remember { mutableStateOf(DetectionState.SEARCHING_DOCUMENT) }
-    var detectedCorners by remember { mutableStateOf(EdgeDetector.defaultCorners()) }
+    var detectedCorners by remember { mutableStateOf(emptyList<Offset>()) }
     // Upright aspect ratio (width/height) of the live camera analysis frame. The
     // PreviewView uses FILL_CENTER (center-crop) scaling, so the overlay needs this
     // to reproduce the same crop when mapping normalized corners to screen pixels —
@@ -263,6 +268,9 @@ fun CameraScanScreen(
     // screen's aspect ratio differs from the camera's (true on almost every phone).
     var detectedFrameAspect by remember { mutableStateOf(3f / 4f) }
     val cornerSmoother = remember { CornerSmoother() }
+    // Gates edge detection on physical camera stillness (not document
+    // stillness) — see the analyzer below for how this drives the overlay.
+    val motionDetector = remember { CameraMotionDetector() }
 
     var camera by remember { mutableStateOf<Camera?>(null) }
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
@@ -419,11 +427,16 @@ fun CameraScanScreen(
                     coroutineScope.launch(Dispatchers.IO) {
                         val bitmap = BitmapFactory.decodeFile(photoFile.absolutePath)
                         if (bitmap != null) {
+                            // Always re-run high-resolution still detection on the
+                            // captured photo. Live preview corners are low-res and
+                            // frequently lock onto bedspread / inner ruled lines —
+                            // the full still pipeline is far more accurate.
+                            // ID Card mode keeps the fixed CR-80 frame.
                             val activeCorners = if (scanMode == ScanMode.ID_CARD) {
-                                EdgeDetector.idCardFrameCorners()
-                            } else if (detectedState == DetectionState.DOCUMENT_STABLE || detectedState == DetectionState.DOCUMENT_DETECTED) {
-                                detectedCorners
-                            } else null
+                                BlueEdgeDetector.idCardFrameCorners()
+                            } else {
+                                null  // forces EdgeDetector.detectDocumentCorners(bitmap)
+                            }
 
                             withContext(Dispatchers.Main) {
                                 isShutterBusy = false
@@ -527,21 +540,59 @@ fun CameraScanScreen(
                         if (scanMode == ScanMode.ID_CARD) {
                             imageProxy.close()
                             coroutineScope.launch(Dispatchers.Main) {
-                                detectedCorners = EdgeDetector.idCardFrameCorners()
+                                detectedCorners = BlueEdgeDetector.idCardFrameCorners()
                                 detectedState = DetectionState.IDLE
                             }
                             return@setAnalyzer
                         }
 
-                        val detection = EdgeDetector.analyzeImageProxy(imageProxy)
-                        val smoothed = cornerSmoother.processFrame(detection)
+                        val cameraIsSteady = motionDetector.isStableEnoughForDetection(imageProxy)
+
+                                                if (!cameraIsSteady) {
+                            // Camera is moving, or hasn't held still long enough
+                            // yet — skip the OpenCV pipeline entirely and hide
+                            // any overlay. No guide box, no corner animation,
+                            // until the phone actually stops moving.
+                            
+                            // cornerSmoother.reset() // এটি এখন আর দরকার নেই
+                            
+                            imageProxy.close()
+                            coroutineScope.launch(Dispatchers.Main) {
+                                detectedCorners = emptyList<Offset>()
+                                detectedState = DetectionState.SEARCHING_DOCUMENT
+                            }
+                            return@setAnalyzer
+                        }
+
+                        val detection = try {
+                            BlueEdgeDetector.analyzeImageProxy(imageProxy)
+                        } finally {
+                            // MUST close every frame — otherwise CameraX stops delivering
+                            // frames after the internal queue fills (classic silent freeze).
+                            imageProxy.close()
+                        }
+                        
+                        // cornerSmoother.processFrame() আর দরকার নেই, কারণ BlueEdgeDetector নিজেই এখন কোণাগুলো স্মুথ করে দিচ্ছে!
+                        
                         coroutineScope.launch(Dispatchers.Main) {
-                            detectedCorners = smoothed.corners
-                            detectedState = smoothed.state
-                            detectedFrameAspect = smoothed.frameAspectRatio
+                            // সরাসরি detection থেকে ডেটা নিয়ে নিন
+                            detectedCorners = detection.corners
+                            
+                            // isDocumentDetected এর ওপর ভিত্তি করে স্টেট সেট করুন
+                            detectedState = if (detection.isDocumentDetected) {
+                                DetectionState.DOCUMENT_DETECTED // (অথবা আপনার কোডে যদি শুধু 'DETECTED' থাকে, সেটি দিন)
+                            } else {
+                                DetectionState.SEARCHING_DOCUMENT
+                            }
+                            
+                            detectedFrameAspect = detection.frameAspectRatio
+                            
+                            // আপনি চাইলে এখন UI তে ডকুমেন্ট টাইপও দেখাতে পারেন (Optional)
+                            // val currentDocType = detection.documentType 
                         }
                     }
                 }
+
 
                 val cameraSelector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
 
@@ -904,7 +955,7 @@ fun CameraScanScreen(
                         }
                     } else {
                         if (hasCameraPermission) {
-                            DocumentDetectionOverlay(
+                            BlueEdgeOverlay(
                                 corners = detectedCorners,
                                 state = detectedState,
                                 scanMode = scanMode,
@@ -948,7 +999,7 @@ fun CameraScanScreen(
                             }
                             else -> {
                                 AlignmentGuideInfo(
-                                    "Align document edges in frame",
+                                    "Point at document & hold steady",
                                     Icons.Default.DocumentScanner,
                                     Color(0xAA111827),
                                     Color(0xFFD1D5DB),
@@ -1507,7 +1558,10 @@ fun DocumentDetectionOverlay(
             drawLine(bracketColor, Offset(cardL + cardW + 2 - cornerLen, cardT + cardH), Offset(cardL + cardW + 2, cardT + cardH), strokeWidth = bracketStroke)
             drawLine(bracketColor, Offset(cardL + cardW + 2, cardT + cardH), Offset(cardL + cardW + 2, cardT + cardH - cornerLen), strokeWidth = bracketStroke)
 
-        } else if (corners.size == 4) {
+        } else if (corners.size == 4 && state != DetectionState.SEARCHING_DOCUMENT) {
+            // No corners are drawn while still searching (camera settling or no
+            // document found yet) — only once a document is actually detected
+            // does the quad + corner overlay appear. See CameraMotionDetector.
             // The PreviewView renders the camera feed with FILL_CENTER (center-crop)
             // scaling. That means the visible on-screen frame is a cropped subset of
             // the full analyzed frame whenever the screen's aspect ratio doesn't
@@ -1701,7 +1755,6 @@ fun HorizontalFeatureBar(
 ) {
     val modes = listOf(
         ScannerFeatureMode.SCAN,
-        ScannerFeatureMode.SMART_ERASE,
         ScannerFeatureMode.ID_CARDS,
         ScannerFeatureMode.QUESTION_SET,
         ScannerFeatureMode.TRANSLATE,
